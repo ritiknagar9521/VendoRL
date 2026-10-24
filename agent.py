@@ -131,4 +131,13 @@ if __name__ == "__main__":
         if e % 50 == 0:
             print(f"Episode {e}/{episodes} - Reward: {total_reward:.2f} - Epsilon: {agent.epsilon:.2f}")
 
+    print("Training complete!")
     
+    # Save the advanced graph
+    smoothed = [np.mean(rewards_history[i:i+50]) for i in range(0, len(rewards_history), 50)]
+    plt.plot(smoothed)
+    plt.title("DQN Agent Profit Over Time (Complex Environment)")
+    plt.xlabel("Episodes (Fifties)")
+    plt.ylabel("Average Profit ($)")
+    plt.savefig("dqn_training_results.png")
+    print("Graph saved as 'dqn_training_results.png'")
