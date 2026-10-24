@@ -49,3 +49,86 @@ class DQNAgent:
         # Mean Squared Error Loss
         self.criterion = nn.MSELoss()
 
+    def remember(self, state, action, reward, next_state, done):
+        """Saves the memory to the replay buffer."""
+        self.memory.append((state, action, reward, next_state, done))
+
+    def act(self, state):
+        """Epsilon-greedy policy using the neural network."""
+        # Explore
+        if np.random.rand() <= self.epsilon:
+            return random.randrange(self.action_size)
+            
+        # Exploit: Ask the neural network for the best action
+        state_tensor = torch.FloatTensor(state).unsqueeze(0)
+        with torch.no_grad(): # Don't track gradients during prediction
+            q_values = self.model(state_tensor)
+        return np.argmax(q_values.numpy())
+
+    def replay(self):
+        """Trains the neural network using random memories from the buffer."""
+        # Wait until we have enough memories to form a batch
+        if len(self.memory) < self.batch_size:
+            return
+            
+        # Randomly sample a batch of memories
+        minibatch = random.sample(self.memory, self.batch_size)
+        
+        for state, action, reward, next_state, done in minibatch:
+            target = float(reward)
+            if not done:
+                # Bellman Equation: target = Reward + Gamma * Max(Future Q)
+                next_state_tensor = torch.FloatTensor(next_state).unsqueeze(0)
+                target += self.gamma * self.model(next_state_tensor).detach().max().item()
+                
+            # Get the current predictions from the network
+            state_tensor = torch.FloatTensor(state).unsqueeze(0)
+            target_f = self.model(state_tensor)
+            
+            # Update the specific action's Q-value with our new target
+            target_f[0][action] = target
+            
+            # Perform gradient descent to train the network
+            self.optimizer.zero_grad()
+            output = self.model(state_tensor)
+            loss = self.criterion(output, target_f)
+            loss.backward()
+            self.optimizer.step()
+            
+        # Decay epsilon
+        if self.epsilon > self.epsilon_min:
+            self.epsilon *= self.epsilon_decay
+
+# --- TRAINING SCRIPT ---
+if __name__ == "__main__":
+    env = VendingEnv()
+    agent = DQNAgent(env)
+    
+    # DQN takes longer to train than tables. We will do 1,000 episodes.
+    # Depending on your laptop, this might take 1-3 minutes.
+    episodes = 1000
+    rewards_history = []
+    
+    print("Starting DQN Training... This will take a moment.")
+    for e in range(episodes):
+        state = env.reset()
+        total_reward = 0
+        done = False
+        
+        while not done:
+            action = agent.act(state)
+            next_state, reward, done = env.step(action)
+            
+            # Save to memory
+            agent.remember(state, action, reward, next_state, done)
+            state = next_state
+            total_reward += reward
+            
+            # Train the network
+            agent.replay()
+            
+        rewards_history.append(total_reward)
+        if e % 50 == 0:
+            print(f"Episode {e}/{episodes} - Reward: {total_reward:.2f} - Epsilon: {agent.epsilon:.2f}")
+
+    
