@@ -1,78 +1,78 @@
-import random
+import numpy as np
 
-class VendingEnvironment:
+class ComplexVendingEnv:
     def __init__(self):
-        # Maximum inventory the machine can hold
-        self.max_inventory = 3
+        self.max_inventory = 10
+        self.max_time = 10
         
-        # Time blocks: 0 (Morning), 1 (Afternoon), 2 (Evening)
-        self.max_time_steps = 3
+        # Prices for Snacks and Drinks
+        self.price_tiers = [1, 3, 5]
         
-        # Action space: 0 ($1), 1 ($2), 2 ($3)
-        self.prices = [1, 2, 3]
+        # Base demand rate (lambda) for each price tier: High price = low demand
+        # E.g., At $1, average 2.5 customers/hr. At $5, average 0.5 customers/hr.
+        self.base_demand = {1: 2.5, 3: 1.2, 5: 0.5}
         
+        # Build the 9 possible action combinations
+        self.actions = []
+        for snack_price in self.price_tiers:
+            for drink_price in self.price_tiers:
+                self.actions.append((snack_price, drink_price))
+                
         self.reset()
 
     def reset(self):
-        """Starts a new day (episode). Restocks and sets time to Morning (0)."""
-        self.inventory = self.max_inventory
-        self.time_step = 0
-        return self.get_state()
+        self.snack_inv = self.max_inventory
+        self.drink_inv = self.max_inventory
+        self.time = 0
+        return self._get_state()
 
-    def get_state(self):
-        """Returns the current state tuple: (Inventory, Time Block)"""
-        return (self.inventory, self.time_step)
+    def _get_state(self):
+        return (self.snack_inv, self.drink_inv, self.time)
 
-    def step(self, action):
-        """
-        Executes the chosen price action, simulates stochastic customer demand,
-        calculates reward, and advances time.
-        """
-        current_price = self.prices[action]
-        reward = 0
+    def step(self, action_idx):
+        snack_price, drink_price = self.actions[action_idx]
         
-        # 1. Simulate Stochastic Customer Demand
-        if self.inventory > 0:
-            # Base probability drops as price increases
-            if action == 0:     # $1
-                buy_chance = 0.8
-            elif action == 1:   # $2
-                buy_chance = 0.5
-            else:               # $3
-                buy_chance = 0.2
-            
-            # Time of day modifies the probability
-            if self.time_step == 0:      # Morning (Busy)
-                buy_chance += 0.1
-            elif self.time_step == 2:    # Evening (Slow)
-                buy_chance -= 0.1
-                
-            # Roll the dice: Did a customer buy?
-            if random.random() < buy_chance:
-                self.inventory -= 1
-                reward = current_price  # Positive reward for sale
-                
-        # 2. Advance Time
-        self.time_step += 1
-        done = False
+        # 1. Check for Rush Hour (Lunchtime spike at Hour 5)
+        traffic_multiplier = 2.0 if self.time == 5 else 1.0
         
-        # 3. Check for End of Day & Apply Penalty
-        if self.time_step >= self.max_time_steps:
-            done = True
-            # Penalty: -1 for every unsold item
-            reward -= (self.inventory * 1) 
+        # 2. Calculate Poisson lambda (average expected sales)
+        snack_lambda = self.base_demand[snack_price] * traffic_multiplier
+        drink_lambda = self.base_demand[drink_price] * traffic_multiplier
+        
+        # 3. Simulate actual sales using Poisson distribution
+        # You can't sell more than you have in inventory!
+        snack_sales = min(self.snack_inv, np.random.poisson(snack_lambda))
+        drink_sales = min(self.drink_inv, np.random.poisson(drink_lambda))
+        
+        # Update inventory
+        self.snack_inv -= snack_sales
+        self.drink_inv -= drink_sales
+        
+        # 4. Calculate Financials
+        revenue = (snack_sales * snack_price) + (drink_sales * drink_price)
+        holding_cost = 0.1 * (self.snack_inv + self.drink_inv)
+        
+        self.time += 1
+        done = (self.time >= self.max_time or (self.snack_inv == 0 and self.drink_inv == 0))
+        
+        reward = revenue - holding_cost
+        
+        # Terminal Penalty
+        if done:
+            reward -= 2.0 * (self.snack_inv + self.drink_inv)
             
-        return self.get_state(), reward, done
+        return self._get_state(), reward, done
 
-# --- Quick Test to verify the environment works ---
+# --- TEST SCRIPT ---
 if __name__ == "__main__":
-    env = VendingEnvironment()
+    env = ComplexVendingEnv()
     state = env.reset()
-    print(f"Start of Day State: {state}")
+    print("Starting Day -> State:", state)
     
-    # Test setting price to $2 (Action 1)
-    next_state, reward, done = env.step(action=1)
-    
-    print(f"Action Taken: Normal Price ($2)")
-    print(f"Reward Received: ${reward}")
-    print(f"Next State: {next_state} | Is day over? {done}")
+    done = False
+    while not done:
+        # Blindly choose Action 4 (Snack $3, Drink $3)
+        action = 4 
+        prices = env.actions[action]
+        next_state, reward, done = env.step(action)
+        print(f"Hour {next_state[2]} | Prices: S${prices[0]} D${prices[1]} | Inv left: (S:{next_state[0]}, D:{next_state[1]}) | Profit: ${reward:.2f}")
