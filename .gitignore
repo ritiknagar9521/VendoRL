@@ -1,0 +1,21 @@
+# Virtual environments
+virtenv
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE files
+.vscode/
+.idea/
+
+# Reports
+# AI_Assignment2_REPORT.pdf
+
+# Project output folders
+REST/
+results/
+
+# Model artifacts
+# models/
