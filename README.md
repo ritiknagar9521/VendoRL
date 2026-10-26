@@ -135,7 +135,6 @@ The supplied dashboard summarizes training progress, average profit, unsold inve
 
 These values are approximate readings from the supplied dashboard and should be verified using the final evaluation output before being treated as confirmed experimental results.
 
-![VendoRL PPO Results Dashboard](dashboard.png)
 
 ## 8. Project Structure
 
